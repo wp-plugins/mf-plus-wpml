@@ -1,5 +1,5 @@
 === MF Plus WPML ===
-Contributors: Gnuget, Hunk, Astrata Software (http://astrata.mx)
+Contributors: Gnuget, hunk, Astrata Software (http://astrata.mx)
 Tags: Magic Fields, WPML,translate,cms,languages
 Tested up to: Wordpress 3.0
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=edgar%40programador%2ecom&lc=GB&item_name=Donation%20Magic%20Fields&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest
