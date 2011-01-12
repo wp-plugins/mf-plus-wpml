@@ -3,7 +3,7 @@ Contributors: Gnuget, hunk, Astrata Software (http://astrata.mx)
 Tags: Magic Fields, WPML,translate,cms,languages
 Tested up to: Wordpress 3.0
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=edgar%40programador%2ecom&lc=GB&item_name=Donation%20Magic%20Fields&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest
-Stable tag: 1.0
+Stable tag: 1.1
 Description: MF Plus WPML fixes compatibility issues that existed between Magic Fields (http://magicfields.org) and WPML (http://wpml.org)
 
 == Description == 
@@ -23,6 +23,10 @@ Follow The following steps to install this plugin
 
 
 == Changelog ==
+
+= 1.1 =
+
+* Fix in translations where exists a duplicable group and field
 
 = 1.0 = 
 

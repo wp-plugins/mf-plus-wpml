@@ -3,7 +3,7 @@
 Plugin Name: MF Plus WPML
 Plugin URI: http://magicfields.org
 Description: This plugin provide a integration between magic fields and WPML
-Version: 1.0
+Version: 1.1
 Author: Magic Fields Team
 Author URI: http://magicfields.org
 Licence: GPL2
@@ -119,10 +119,29 @@ function mfplus_update_values($field_meta_id,$name,$group_index,$field_index,$po
   foreach($ids as $value) {
 
     if(in_array($writepanel_id."_".$name,$translatables)){
-      //@todo use the GetMetaID for get the meta_id instead of this query 
-      $meta_id = $wpdb->get_var($wpdb->prepare("SELECT id FROM ".MF_TABLE_POST_META." WHERE post_id = {$value->element_id} AND field_name = '{$name}' AND group_count = {$group_index} AND field_count = {$field_index} AND order_id = {$group_index}"));
-      //updating the field value
-      update_post_meta($value->element_id,$name,$value_field); 
+      add_post_meta($value->element_id,$name,$value_field);  
+			$meta_id = $wpdb->insert_id;
+
+      // Adding  the referencie in the magic fields post meta table
+			$wpdb->query("INSERT INTO ". MF_TABLE_POST_META .
+			  " (id, field_name, group_count, field_count, post_id,order_id) ".
+			  " VALUES ({$meta_id}, '{$name}',{$group_index},{$field_index},{$value->element_id},{$group_index})"
+	    );
+    }else{
+      $exists =  $wpdb->get_var("SELECT count(1) FROM ". MF_TABLE_POST_META .
+			  " WHERE field_name = '{$name}' AND group_count = {$group_index} AND  field_count = {$field_index} AND  post_id = {$value->element_id} AND order_id = {$group_index}");
+
+      //if don exist we will insert this field with a black value
+      if(!$exists) {
+        add_post_meta($value->element_id,$name,"");  
+  			$meta_id = $wpdb->insert_id;
+
+        // Adding  the referencie in the magic fields post meta table
+		  	$wpdb->query("INSERT INTO ". MF_TABLE_POST_META .
+			    " (id, field_name, group_count, field_count, post_id,order_id) ".
+			    " VALUES ({$meta_id}, '{$name}',{$group_index},{$field_index},{$value->element_id},{$group_index})"
+  	    );
+      }
     }
   }
 }
@@ -223,4 +242,109 @@ function save_translatable_fields(){
       wp_get_referer()
     )
   );
+}
+
+
+add_action('save_post','mfpluswpml_delete_extras',11);
+function mfpluswpml_delete_extras($postId) {
+  global $flag,$wpdb;
+  if($flag != 1) {
+    return $postId;
+  }
+
+  if ( $the_post = wp_is_post_revision($postId)) {
+    $postId = $the_post;
+  }
+
+
+  if(!empty($_REQUEST['rc-custom-write-panel-verify-key'])) {
+  	if (!(current_user_can('edit_posts', $postId) || current_user_can('edit_published_pages', $postId))){
+	     return $postId;
+    }
+  }
+
+  //looking for the translated version of the post
+  $trid = $wpdb->get_var($wpdb->prepare("SELECT trid FROM {$wpdb->prefix}icl_translations WHERE element_id = {$postId} AND (element_type = 'post_post' OR element_type = 'post_page')"));
+
+  //Getting the ID's of the translatable fields
+  $ids = $wpdb->get_results("SELECT element_id FROM {$wpdb->prefix}icl_translations  WHERE trid = {$trid} AND element_id != {$postId}");
+
+  $extra_meta_ids = array();
+  foreach($ids as $k => $v) {
+    $tmp = $wpdb->get_results("select id from wp_mf_post_meta c WHERE c.post_id in (".$postId.",".$v->element_id.") AND id NOT IN (select a.id from wp_mf_post_meta a , wp_mf_post_meta b WHERE a.post_id = ".$v->element_id." AND b.post_id = ".$postId." AND a.field_name = b.field_name AND a.group_count = b.group_count AND a.field_count = b.field_count AND a.order_id = b.order_id UNION select a.id from wp_mf_post_meta a , wp_mf_post_meta b WHERE a.post_id = ".$postId." AND b.post_id = ".$v->element_id." AND a.field_name = b.field_name AND a.group_count = b.group_count AND a.field_count = b.field_count AND a.order_id = b.order_id)");
+    foreach($tmp as $z => $y) {
+      $extra_meta_ids[] = $y->id;
+    }  
+
+
+    $meta_id = implode(",",$extra_meta_ids);
+
+    //deleting references for add the new data when the post be saved
+    $wpdb->query("DELETE FROM ".$wpdb->prefix."postmeta WHERE meta_id IN (".$meta_id.")");
+    $wpdb->query("DELETE FROM ".MF_TABLE_POST_META." WHERE id iN (".$meta_id.")");  
+
+
+  }
+}
+
+add_action('save_post','mfpluswpml_save_post',9);
+function mfpluswpml_save_post($postId) {
+  global $flag,$wpdb;
+  if($flag == 1) {
+    return $postId;
+  } 
+
+  if ( $the_post = wp_is_post_revision($postId)) {
+    $postId = $the_post;
+  }
+
+  if(!empty($_REQUEST['rc-custom-write-panel-verify-key'])) {
+	  //the user  can edit posts?
+		if (!(current_user_can('edit_posts', $postId) || current_user_can('edit_published_pages', $postId))){
+		  return $postId;
+    }
+    //looking for the translated version of the post
+    $trid = $wpdb->get_var($wpdb->prepare("SELECT trid FROM {$wpdb->prefix}icl_translations WHERE element_id = {$postId} AND (element_type = 'post_post' OR element_type = 'post_page')"));
+
+    //Getting the ID's of the translatable fields
+    $ids = $wpdb->get_results("SELECT element_id FROM {$wpdb->prefix}icl_translations  WHERE trid = {$trid} AND element_id != {$postId}");
+
+    if(empty($ids)){
+      return true;
+    }
+
+     /** getting the translatables fields  **/
+    if(!$translatables = get_option("mfplus_translatables")){
+      $translatables = array(); 
+    }
+
+    array_walk($translatables,'get_custom_field_name');
+    $translatables_text = implode("','",$translatables);
+
+    $ids_text = array();
+    foreach($ids as $k => $v) {
+      $ids_text[] = $v->element_id;    
+    }
+
+    $ids_text = implode(",",$ids_text);
+     
+    $meta_id = array();
+    $mids = $wpdb->get_results("SELECT id FROM ".MF_TABLE_POST_META." WHERE field_name  IN ('".$translatables_text."') AND post_id IN (".$ids_text.")");
+    foreach($mids as $key => $value) {
+      $meta_id[] = $value->id;
+    }
+  
+    $meta_id = implode(",",$meta_id);
+
+    //deleting references for add the new data when the post be saved
+    $wpdb->query("DELETE FROM ".$wpdb->prefix."postmeta WHERE meta_id IN (".$meta_id.")");
+    $wpdb->query("DELETE FROM ".MF_TABLE_POST_META." WHERE id iN (".$meta_id.")");  
+  }
+}
+
+/**
+ * Return the custom field name from the translatable array
+ */ 
+function get_custom_field_name(&$item) {
+  $item =  preg_replace("/[0-9]+\_/i","",$item);
 }
